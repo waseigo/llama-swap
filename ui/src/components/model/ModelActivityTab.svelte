@@ -1,7 +1,12 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import type { ActivityLogEntry } from "../../lib/types";
-  import { activityRevision, getActivity, inflightRequestEntries } from "../../stores/api";
+  import type { ActivityLogEntry, ActivityStatsData } from "../../lib/types";
+  import {
+    activityRevision,
+    getActivity,
+    getActivityStats,
+    inflightRequestEntries,
+  } from "../../stores/api";
   import { connectionState } from "../../stores/theme";
   import { persistentStore } from "../../stores/persistent";
   import {
@@ -9,6 +14,7 @@
     normalizeActivityFilters,
     type ActivityFilters,
   } from "../../lib/activityFilters";
+  import ActivityStats from "../ActivityStats.svelte";
   import ActivityTable from "../ActivityTable.svelte";
 
   interface Props {
@@ -24,6 +30,7 @@
   );
 
   let modelMetrics = $state<ActivityLogEntry[]>([]);
+  let stats = $state<ActivityStatsData | null>(null);
   let page = $state(1);
   let limit = $state($storedPageSize);
   let sort = $state("id");
@@ -48,11 +55,15 @@
     lastRefresh = Date.now();
     const id = ++requestID;
     try {
-      const activity = await getActivity({ model: modelId, page, limit, sort, order, filters });
+      const [activity, activityStats] = await Promise.all([
+        getActivity({ model: modelId, page, limit, sort, order, filters }),
+        getActivityStats(modelId),
+      ]);
       if (id !== requestID) return;
       modelMetrics = activity.data;
       total = activity.total;
       totalPages = activity.total_pages;
+      stats = activityStats;
     } catch (error) {
       console.error("Failed to refresh model activity:", error);
     }
@@ -127,6 +138,7 @@
   });
 </script>
 
+<ActivityStats {stats} />
 <ActivityTable
   metrics={modelMetrics}
   inflightRequests={modelInflightRequests}
